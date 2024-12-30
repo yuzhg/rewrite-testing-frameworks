@@ -94,4 +94,139 @@ class JMockitNonStrictExpectationToExpectationTest implements RewriteTest {
                 )
         );
     }
+
+    @Test
+    void whenNullResultAndTimes() {
+        //language=java
+        rewriteRun(
+                java(
+                        """
+                          class MyObject {
+                              public String getSomeField() {
+                                  return "X";
+                              }
+                          }
+                          """
+                ),
+                java(
+                        """
+                          import mockit.NonStrictExpectations;
+                          import mockit.Mocked;
+                          import mockit.integration.junit4.JMockit;
+                          import org.junit.runner.RunWith;
+                          import static org.junit.Assert.assertNull;
+
+                          @RunWith(JMockit.class)
+                          class MyTest {
+                              @Mocked
+                              MyObject myObject;
+
+                              void test() {
+                                  new NonStrictExpectations() {{
+                                      myObject.getSomeField();
+                                      result = null;
+                                      times = 1;
+                                      myObject.getSomeField();
+                                      result = null;
+                                  }};
+                                  assertNull(myObject.getSomeField());
+                              }
+                          }
+                          """,
+                        """
+                          import mockit.Expectations;
+                          import mockit.Mocked;
+                          import mockit.integration.junit4.JMockit;
+                          import org.junit.runner.RunWith;
+                          import static org.junit.Assert.assertNull;
+
+                          @RunWith(JMockit.class)
+                          class MyTest {
+                              @Mocked
+                              MyObject myObject;
+
+                              void test() {
+                                  new Expectations() {{
+                                      myObject.getSomeField();
+                                      result = null;
+                                      times = 1;
+                                      myObject.getSomeField();
+                                      result = null;
+                                      minTimes = 0;
+                                  }};
+                                  assertNull(myObject.getSomeField());
+                              }
+                          }
+                          """
+                )
+        );
+    }
+
+    @Test
+    void whenNullResultAndTimesAndParam() {
+        //language=java
+        rewriteRun(
+                java(
+                        """
+                          class MyObject {
+                              public String getSomeField() {
+                                  return "X";
+                              }
+                          }
+                          """
+                ),
+                java(
+                        """
+                          import mockit.NonStrictExpectations;
+                          import mockit.Mocked;
+                          import mockit.integration.junit4.JMockit;
+                          import org.junit.runner.RunWith;
+                          import static org.junit.Assert.assertNull;
+
+                          @RunWith(JMockit.class)
+                          class MyTest {
+                              @Mocked
+                              MyObject myObject;
+
+                              void test() {
+                                  new NonStrictExpectations(myObject) {{
+                                      myObject.getSomeField();
+                                      result = null;
+                                      times = 1;
+                                      myObject.getSomeField();
+                                      result = null;
+                                  }};
+                                  assertNull(myObject.getSomeField());
+                              }
+                          }
+                          """,
+                        """
+                          import mockit.Expectations;
+                          import mockit.Mocked;
+                          import mockit.integration.junit4.JMockit;
+                          import org.junit.runner.RunWith;
+                          import static org.junit.Assert.assertNull;
+
+                          @RunWith(JMockit.class)
+                          class MyTest {
+                              @Mocked
+                              MyObject myObject;
+
+                              void test() {
+                                  new Expectations(myObject) {{
+                                      myObject.getSomeField();
+                                      result = null;
+                                      times = 1;
+                                      myObject.getSomeField();
+                                      result = null;
+                                      minTimes = 0;
+                                  }};
+                                  assertNull(myObject.getSomeField());
+                              }
+                          }
+                          """
+                )
+        );
+    }
+
 }

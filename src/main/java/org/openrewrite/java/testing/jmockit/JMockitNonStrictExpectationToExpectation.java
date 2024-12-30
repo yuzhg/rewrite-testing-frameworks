@@ -141,7 +141,8 @@ public class JMockitNonStrictExpectationToExpectation extends Recipe {
                          } else {
                              if (haveMock) {
                                  // create new statement of minTimes and insert.
-                                 bl = templateMinTimes.apply(updateCursor(bl), s.getCoordinates().before());
+                                 bl = templateMinTimes.apply(getCursor(), s.getCoordinates().before());
+                                 updateCursor(bl);
                              }
                              haveMock = true;
                              haveTimes = false;
@@ -151,7 +152,8 @@ public class JMockitNonStrictExpectationToExpectation extends Recipe {
                 }
 
                 if (!haveTimes) {
-                    bl = templateMinTimes.apply(updateCursor(bl), bl.getStatements().get(bl.getStatements().size() - 1).getCoordinates().after());
+                    bl = templateMinTimes.apply(getCursor(), bl.getStatements().get(bl.getStatements().size() - 1).getCoordinates().after());
+                    updateCursor(bl);
                 }
             }
             return bl;

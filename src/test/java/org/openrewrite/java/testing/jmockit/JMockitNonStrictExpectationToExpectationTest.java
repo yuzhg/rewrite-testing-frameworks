@@ -28,7 +28,7 @@ class JMockitNonStrictExpectationToExpectationTest implements RewriteTest {
                                         LEGACY_JMOCKIT_DEPENDENCY
                                 )
                 )
-                .typeValidationOptions(TypeValidation.none())
+//                .typeValidationOptions(TypeValidation.none())
                 .recipe(new JMockitNonStrictExpectationToExpectation());
     }
 
@@ -266,7 +266,7 @@ class JMockitNonStrictExpectationToExpectationTest implements RewriteTest {
                                   new NonStrictExpectations(myObject) {{
                                       myObject.getSomeField();
                                       times = 1;
-                                      returns(null);
+                                      returns(null, null, new Object[0]);
                                   }};
                                   assertNull(myObject.getSomeField());
                               }
@@ -383,6 +383,7 @@ class JMockitNonStrictExpectationToExpectationTest implements RewriteTest {
                 java(
                         """
                           import mockit.NonStrictExpectations;
+                          import mockit.Delegate;
                           import mockit.Mocked;
                           import mockit.integration.junit4.JMockit;
                           import org.junit.runner.RunWith;
@@ -399,7 +400,7 @@ class JMockitNonStrictExpectationToExpectationTest implements RewriteTest {
                                       result = new Delegate<Object>() {
                                          @SuppressWarnings("unused")
                                          void getSomeField(){
-                                             setSomeField("X");
+                                             myObject.setSomeField("X");
                                          }
                                       };
                                   }};
@@ -408,6 +409,7 @@ class JMockitNonStrictExpectationToExpectationTest implements RewriteTest {
                           }
                           """,
                         """
+                          import mockit.Delegate;
                           import mockit.Expectations;
                           import mockit.Mocked;
                           import mockit.integration.junit4.JMockit;
@@ -425,7 +427,7 @@ class JMockitNonStrictExpectationToExpectationTest implements RewriteTest {
                                       result = new Delegate<Object>() {
                                          @SuppressWarnings("unused")
                                          void getSomeField(){
-                                             setSomeField("X");
+                                             myObject.setSomeField("X");
                                          }
                                       };
                                       minTimes = 0;

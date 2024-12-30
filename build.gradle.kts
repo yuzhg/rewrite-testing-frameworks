@@ -22,6 +22,7 @@ recipeDependencies {
     parserClasspath("org.mockito:mockito-junit-jupiter:5.+")
     parserClasspath("org.jmockit:jmockit:1.49")
     parserClasspath("org.jmockit:jmockit:1.22") // last version with NonStrictExpectations
+    parserClasspath("org.jmockit:jmockit:1.7") // oldest possible version.
     parserClasspath("org.mockito:mockito-junit-jupiter:3.+")
     parserClasspath("org.powermock:powermock-api-mockito:1.7.+")
     parserClasspath("org.powermock:powermock-core:1.7.+")

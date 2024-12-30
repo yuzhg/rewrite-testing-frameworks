@@ -30,6 +30,7 @@ import org.openrewrite.java.JavaTemplate;
 import org.openrewrite.java.search.UsesType;
 import org.openrewrite.java.tree.J;
 import org.openrewrite.java.tree.Statement;
+import org.openrewrite.java.tree.TypeTree;
 import org.openrewrite.java.tree.TypeUtils;
 
 import java.util.List;
@@ -57,36 +58,45 @@ public class JMockitNonStrictExpectationToExpectation extends Recipe {
 
     private static class JmockitUpgradeRewriter extends JavaIsoVisitor<ExecutionContext> {
         private static final String MSG_KEY_IN_NON_STRICT_EXP = "inNonStrictExpectation";
+        public static final String KEYWORDS_RETURNS = "returns";
 
         @Override
         public J.NewClass visitNewClass(J.NewClass newClass, ExecutionContext executionContext) {
             J.NewClass exp = newClass;
-            if (null != newClass.getClazz() && TypeUtils.isAssignableTo("mockit.NonStrictExpectations", newClass.getClazz().getType())) {
-                maybeRemoveImport("mockit.NonStrictExpectations");
-                maybeAddImport("mockit.Expectations");
+            TypeTree clazz = newClass.getClazz();
 
-                JavaTemplate templateExpectation = JavaTemplate.builder("new Expectations() {{}}")
-                        .imports("mockit.Expectations")
-                        .javaParser(JavaParser.fromJavaVersion().classpathFromResources(executionContext, "jmockit-1.49"))
-                        .build();
-
-                J.NewClass templateNewClass = templateExpectation.apply(
-                        updateCursor(exp),
-                        exp.getCoordinates().replace()
-                );
-
-                exp = templateNewClass
-                        .withId(exp.getId())
-                        .withArguments(exp.getArguments())
-                        .withBody(exp.getBody());
-
-                updateCursor(exp);
-                getCursor().putMessage(MSG_KEY_IN_NON_STRICT_EXP, true);
-                exp = super.visitNewClass(exp, executionContext);
-                getCursor().putMessage(MSG_KEY_IN_NON_STRICT_EXP, false);
-            } else {
-                exp = super.visitNewClass(newClass, executionContext);
+            if (null == clazz) {
+                return super.visitNewClass(newClass, executionContext);
             }
+
+            // skip delegate, don't need to handle it.
+            if (clazz instanceof J.ParameterizedType
+                    &&  "Delegate".equalsIgnoreCase(((J.Identifier) ((J.ParameterizedType) clazz).getClazz()).getSimpleName())) {
+                return newClass;
+            }
+
+
+            // we only care non-strict expectations
+            if (!TypeUtils.isAssignableTo("mockit.NonStrictExpectations", clazz.getType())) {
+                return super.visitNewClass(newClass, executionContext);
+            }
+
+            maybeRemoveImport("mockit.NonStrictExpectations");
+            maybeAddImport("mockit.Expectations");
+
+            JavaTemplate templateExpectation = JavaTemplate.builder("new Expectations() {{}}")
+                    .imports("mockit.Expectations")
+                    .javaParser(JavaParser.fromJavaVersion().classpathFromResources(executionContext, "jmockit-1.49"))
+                    .build();
+
+            J.NewClass templateNewClass = templateExpectation.apply(updateCursor(exp), exp.getCoordinates().replace());
+            exp = templateNewClass.withId(exp.getId()).withArguments(exp.getArguments()).withBody(exp.getBody());
+            updateCursor(exp);
+
+            getCursor().putMessage(MSG_KEY_IN_NON_STRICT_EXP, true);
+            exp = super.visitNewClass(exp, executionContext);
+            getCursor().putMessage(MSG_KEY_IN_NON_STRICT_EXP, false);
+
             return exp;
         }
 
@@ -110,24 +120,37 @@ public class JMockitNonStrictExpectationToExpectation extends Recipe {
                 boolean haveMock = false;
                 boolean haveTimes = false;
                 for (Statement s : statements) {
-                    if (s instanceof J.MethodInvocation) {
-                        if (haveMock && !haveTimes) {
-                            // create new statement of minTimes and insert.
-                            bl = templateMinTimes.apply(updateCursor(bl), s.getCoordinates().before());
-                        }
-                        haveMock = true;
-                        haveTimes = false;
-                    } else if (s instanceof J.Assignment) {
+                     if (s instanceof J.Assignment) {
                         J.Identifier identifier = ((J.Assignment) s).getVariable().cast();
                         String simpleName = identifier.getSimpleName();
                         if (simpleName.equalsIgnoreCase("times") || simpleName.equalsIgnoreCase("minTimes")) {
                             haveTimes = true;
+                            haveMock = false;
                         }
-                    }
-                    // we don't care other cases
+                    } else if (s instanceof J.MethodInvocation) {
+                         if (KEYWORDS_RETURNS.equalsIgnoreCase(((J.MethodInvocation) s).getSimpleName())) {
+                             JavaTemplate templateResults = JavaTemplate.builder("result = #{any()};")
+                                     .contextSensitive()
+                                     .imports("mockit.Expectations")
+                                     .javaParser(JavaParser.fromJavaVersion().classpathFromResources(executionContext,
+                                             "jmockit-1.49"))
+                                     .build();
+                             bl = templateResults.apply(getCursor(), s.getCoordinates().replace(),
+                                     ((J.MethodInvocation) s).getArguments().get(0));
+                             updateCursor(bl);
+                         } else {
+                             if (haveMock) {
+                                 // create new statement of minTimes and insert.
+                                 bl = templateMinTimes.apply(updateCursor(bl), s.getCoordinates().before());
+                             }
+                             haveMock = true;
+                             haveTimes = false;
+                         }
+                     }
+                    // we don't care other statements
                 }
 
-                if (haveMock && !haveTimes) {
+                if (!haveTimes) {
                     bl = templateMinTimes.apply(updateCursor(bl), bl.getStatements().get(bl.getStatements().size() - 1).getCoordinates().after());
                 }
             }

@@ -28,12 +28,15 @@ import org.openrewrite.java.JavaIsoVisitor;
 import org.openrewrite.java.JavaParser;
 import org.openrewrite.java.JavaTemplate;
 import org.openrewrite.java.search.UsesType;
+import org.openrewrite.java.tree.Expression;
 import org.openrewrite.java.tree.J;
 import org.openrewrite.java.tree.Statement;
 import org.openrewrite.java.tree.TypeTree;
 import org.openrewrite.java.tree.TypeUtils;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Value
 @EqualsAndHashCode(callSuper = false)
@@ -117,6 +120,21 @@ public class JMockitNonStrictExpectationToExpectation extends Recipe {
                         .build();
 
                 List<Statement> statements = bl.getStatements();
+
+                // find out result variables if any
+                Set<String> resultVars = new HashSet<>();
+                statements.forEach(s -> {
+                    if (s instanceof J.Assignment) {
+                        J.Assignment assignment = (J.Assignment) s;
+                        resultVars.add(assignment.getAssignment().toString());
+                    } else if (s instanceof J.MethodInvocation) {
+                        J.MethodInvocation methodInvocation = (J.MethodInvocation) s;
+                        if (KEYWORDS_RETURNS.equalsIgnoreCase(methodInvocation.getSimpleName())) {
+                            methodInvocation.getArguments().forEach(arg -> resultVars.add(arg.toString()));
+                        }
+                    }
+                });
+
                 boolean haveMock = false;
                 boolean haveTimes = false;
                 for (Statement s : statements) {
@@ -128,7 +146,8 @@ public class JMockitNonStrictExpectationToExpectation extends Recipe {
                             haveMock = false;
                         }
                     } else if (s instanceof J.MethodInvocation) {
-                         if (KEYWORDS_RETURNS.equalsIgnoreCase(((J.MethodInvocation) s).getSimpleName())) {
+                         J.MethodInvocation methodInvocation = (J.MethodInvocation) s;
+                         if (KEYWORDS_RETURNS.equalsIgnoreCase(methodInvocation.getSimpleName())) {
                              JavaTemplate templateResults = JavaTemplate.builder("result = #{any()};")
                                      .contextSensitive()
                                      .imports("mockit.Expectations")
@@ -136,9 +155,15 @@ public class JMockitNonStrictExpectationToExpectation extends Recipe {
                                              "jmockit-1.49"))
                                      .build();
                              bl = templateResults.apply(getCursor(), s.getCoordinates().replace(),
-                                     ((J.MethodInvocation) s).getArguments().get(0));
+                                     methodInvocation.getArguments().get(0));
                              updateCursor(bl);
                          } else {
+                             // skip result variable related statements.
+                             Expression select = methodInvocation.getSelect();
+                             if (select != null && resultVars.contains(select.toString())) {
+                                 continue;
+                             }
+
                              if (haveMock) {
                                  // create new statement of minTimes and insert.
                                  bl = templateMinTimes.apply(getCursor(), s.getCoordinates().before());

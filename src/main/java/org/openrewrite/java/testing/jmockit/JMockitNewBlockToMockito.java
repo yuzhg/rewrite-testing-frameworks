@@ -223,6 +223,7 @@ public class JMockitNewBlockToMockito extends Recipe {
             StringBuilder template = new StringBuilder();
             if (resultList.isEmpty()) {
                 // There is no result specified, Need to analyse the stub to create the right mock.
+                // not complete yet, refer https://javadoc.io/doc/org.jmockit/jmockit/latest/index.html result section for more details.
                 JavaType.Method methodType = stub.getMethodType();
                 if (null == methodType || "void".equalsIgnoreCase(methodType.getReturnType().toString())) {
                     template.append("doAnswer(invocation -> null)");
@@ -280,7 +281,7 @@ public class JMockitNewBlockToMockito extends Recipe {
             // handle verifications
             if (null == times && null == minTimes) {
                 // default behavior
-                times = 1;
+                minTimes = 1;
             }
 
             templateParams.clear();

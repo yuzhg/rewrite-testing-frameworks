@@ -1,5 +1,6 @@
 package org.openrewrite.java.testing.jmockit;
 
+import org.junit.Ignore;
 import org.junit.jupiter.api.Test;
 import org.openrewrite.InMemoryExecutionContext;
 import org.openrewrite.java.JavaParser;
@@ -236,8 +237,7 @@ class JMockitNewBlockToMockitoTest implements RewriteTest {
                           
                           import static org.junit.jupiter.api.Assertions.assertEquals;
                           import static org.junit.jupiter.api.Assertions.assertNull;
-                          import static org.mockito.Mockito.doReturn;
-                          import static org.mockito.Mockito.verify;
+                          import static org.mockito.Mockito.*;
                           
                           @ExtendWith(MockitoExtension.class)
                           class MyTest {
@@ -247,7 +247,7 @@ class JMockitNewBlockToMockitoTest implements RewriteTest {
                               void test() {
                                   doReturn(null).when(myObject).toString();
                                   assertNull(myObject.toString());
-                                  verify(myObject).toString();
+                                  verify(myObject, atLeast(1)).toString();
                               }
                           }
                           """
@@ -291,8 +291,7 @@ class JMockitNewBlockToMockitoTest implements RewriteTest {
                           import org.mockito.junit.jupiter.MockitoExtension;
                           
                           import static org.junit.jupiter.api.Assertions.assertThrows;
-                          import static org.mockito.Mockito.doReturn;
-                          import static org.mockito.Mockito.verify;
+                          import static org.mockito.Mockito.*;
                           import static org.junit.jupiter.api.Assertions.assertEquals;
                           
                           @ExtendWith(MockitoExtension.class)
@@ -304,7 +303,7 @@ class JMockitNewBlockToMockitoTest implements RewriteTest {
                                   assertThrows(IllegalStateException.class, () -> {
                                       doReturn("foo").when(myObject).toString();
                                       assertEquals("foo", myObject.toString());
-                                      verify(myObject).toString();
+                                      verify(myObject, atLeast(1)).toString();
                                   });
                               }
                           }
@@ -349,8 +348,7 @@ class JMockitNewBlockToMockitoTest implements RewriteTest {
                           import org.mockito.junit.jupiter.MockitoExtension;
                           
                           import static org.junit.jupiter.api.Assertions.assertThrows;
-                          import static org.mockito.Mockito.doThrow;
-                          import static org.mockito.Mockito.verify;
+                          import static org.mockito.Mockito.*;
                           import static org.junit.jupiter.api.Assertions.assertEquals;
                           
                           @ExtendWith(MockitoExtension.class)
@@ -362,7 +360,7 @@ class JMockitNewBlockToMockitoTest implements RewriteTest {
                                   assertThrows(IllegalStateException.class, () -> {
                                       doThrow(new IllegalStateException("foo")).when(myObject).toString();
                                       assertEquals("foo", myObject.toString());
-                                      verify(myObject).toString();
+                                      verify(myObject, atLeast(1)).toString();
                                   });
                               }
                           }
@@ -595,8 +593,7 @@ class JMockitNewBlockToMockitoTest implements RewriteTest {
                           import org.mockito.junit.jupiter.MockitoExtension;
                           
                           import static org.junit.jupiter.api.Assertions.assertEquals;
-                          import static org.mockito.Mockito.doReturn;
-                          import static org.mockito.Mockito.verify;
+                          import static org.mockito.Mockito.*;
                           
                           @ExtendWith(MockitoExtension.class)
                           class MyTest {
@@ -606,10 +603,10 @@ class JMockitNewBlockToMockitoTest implements RewriteTest {
                               void test() {
                                   doReturn(10).when(myObject).toString();
                                   assertEquals(10, myObject.toString());
-                                  verify(myObject).toString();
+                                  verify(myObject, atLeast(1)).toString();
                                   doReturn(100).when(myObject).toString();
                                   assertEquals(100, myObject.toString());
-                                  verify(myObject).toString();
+                                  verify(myObject, atLeast(1)).toString();
                               }
                           }
                           """
@@ -617,4 +614,67 @@ class JMockitNewBlockToMockitoTest implements RewriteTest {
         );
     }
 
+    // my case don't have returns, not handle it now.
+    @Ignore
+    void whenReturnsInOneLine() {
+        //language=java
+        rewriteRun(
+                java(
+                        """
+                          class MyObject {
+                              public String getSomeField() {
+                                  return "X";
+                              }
+                          }
+                          """
+                ),
+                java(
+                        """
+                          import mockit.Expectations;
+                          import mockit.Mocked;
+                          import mockit.integration.junit5.JMockitExtension;
+                          import org.junit.jupiter.api.extension.ExtendWith;
+                          
+                          import static org.junit.jupiter.api.Assertions.assertEquals;
+                          
+                          @ExtendWith(JMockitExtension.class)
+                          class MyTest {
+                              @Mocked
+                              MyObject myObject;
+                          
+                              void test() throws RuntimeException {
+                                  new Expectations() {{
+                                      myObject.getSomeField();
+                                      returns("foo", "bar");
+                                  }};
+                                  assertEquals("foo", myObject.getSomeField());
+                                  assertEquals("bar", myObject.getSomeField());
+                              }
+                          }
+                          """,
+                        """
+                          import org.junit.jupiter.api.extension.ExtendWith;
+                          import org.mockito.Mock;
+                          import org.mockito.junit.jupiter.MockitoExtension;
+                          
+                          import static org.junit.jupiter.api.Assertions.assertEquals;
+                          import static org.mockito.Mockito.when;
+                          import static org.mockito.Mockito.atLeast;
+                          
+                          @ExtendWith(MockitoExtension.class)
+                          class MyTest {
+                              @Mock
+                              MyObject myObject;
+                          
+                              void test() throws RuntimeException {
+                                  doReturn("foo", "bar").when(myObject).getSomeField();
+                                  assertEquals("foo", myObject.getSomeField());
+                                  assertEquals("bar", myObject.getSomeField());
+                                  verify(myObject, atLeast(1)).getSomeField();
+                              }
+                          }
+                          """
+                )
+        );
+    }
 }

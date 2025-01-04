@@ -118,6 +118,9 @@ class ArgumentMatchersRewriter {
         if (arguments.stream().noneMatch(ArgumentMatchersRewriter::isJmockitArgumentMatcher)) {
             return invocation;
         }
+
+        this.visitor.maybeAddImport("org.mockito.ArgumentMatchers", "*", false);
+
         // replace each argument with the appropriate argument matcher
         List<Expression> newArguments = new ArrayList<>(arguments.size());
         for (Expression argument : arguments) {

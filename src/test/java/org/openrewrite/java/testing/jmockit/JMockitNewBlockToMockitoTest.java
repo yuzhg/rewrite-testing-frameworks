@@ -6,6 +6,7 @@ import org.openrewrite.InMemoryExecutionContext;
 import org.openrewrite.java.JavaParser;
 import org.openrewrite.test.RecipeSpec;
 import org.openrewrite.test.RewriteTest;
+import org.openrewrite.test.TypeValidation;
 
 import static org.openrewrite.java.Assertions.java;
 import static org.openrewrite.java.testing.jmockit.JMockitTestUtils.JMOCKIT_DEPENDENCY;
@@ -14,9 +15,8 @@ import static org.openrewrite.java.testing.jmockit.JMockitTestUtils.JUNIT_5_JUPI
 import static org.openrewrite.java.testing.jmockit.JMockitTestUtils.MOCKITO_CORE_DEPENDENCY;
 import static org.openrewrite.java.testing.jmockit.JMockitTestUtils.MOCKITO_JUPITER_DEPENDENCY;
 
-@SuppressWarnings({"SpellCheckingInspection", "ResultOfMethodCallIgnored", "EmptyClassInitializer"})
+@SuppressWarnings({"ResultOfMethodCallIgnored", "EmptyClassInitializer"})
 class JMockitNewBlockToMockitoTest implements RewriteTest {
-
     @Override
     public void defaults(RecipeSpec spec) {
         spec.parser(
@@ -31,7 +31,9 @@ class JMockitNewBlockToMockitoTest implements RewriteTest {
                                         MOCKITO_JUPITER_DEPENDENCY
                                 )
                 )
+                .afterTypeValidationOptions(TypeValidation.none())
                 .recipeFromResources("org.openrewrite.java.testing.jmockit.JNewMockitToMockito");
+
     }
 
     @Test
@@ -851,4 +853,278 @@ class JMockitNewBlockToMockitoTest implements RewriteTest {
                 )
         );
     }
+
+    @Test
+    void whenClassArgumentMatcher() {
+        //language=java
+        rewriteRun(
+                java(
+                        """
+                          import java.util.List;
+                          
+                          class MyObject {
+                              public String getSomeField(List<String> input) {
+                                  return "X";
+                              }
+                              public String getSomeOtherField(Object input) {
+                                  return "Y";
+                              }
+                              public String getSomeArrayField(Object input) {
+                                  return "Z";
+                              }
+                          }
+                          """
+                ),
+                java(
+                        """
+                          import java.util.ArrayList;
+                          import java.util.List;
+                          
+                          import mockit.Expectations;
+                          import mockit.Mocked;
+                          import mockit.integration.junit5.JMockitExtension;
+                          import org.junit.jupiter.api.extension.ExtendWith;
+                          
+                          import static org.junit.jupiter.api.Assertions.assertNull;
+                          
+                          @ExtendWith(JMockitExtension.class)
+                          class MyTest {
+                              @Mocked
+                              MyObject myObject;
+                          
+                              void test() {
+                                  new Expectations() {{
+                                      myObject.getSomeField((List<String>) any);
+                                      result = null;
+                                      myObject.getSomeOtherField((Object) any);
+                                      result = null;
+                                      myObject.getSomeArrayField((byte[]) any);
+                                      result = null;
+                                  }};
+                                  assertNull(myObject.getSomeField(new ArrayList<>()));
+                                  assertNull(myObject.getSomeOtherField(new Object()));
+                                  assertNull(myObject.getSomeArrayField(new byte[0]));
+                              }
+                          }
+                          """,
+                        """
+                          import java.util.ArrayList;
+                          import java.util.List;
+                          
+                          import org.junit.jupiter.api.extension.ExtendWith;
+                          import org.mockito.Mock;
+                          import org.mockito.junit.jupiter.MockitoExtension;
+                          
+                          import static org.junit.jupiter.api.Assertions.assertNull;
+                          import static org.mockito.ArgumentMatchers.*;
+                          import static org.mockito.Mockito.*;
+                          
+                          @ExtendWith(MockitoExtension.class)
+                          class MyTest {
+                              @Mock
+                              MyObject myObject;
+                          
+                              void test() {
+                                  doReturn(null).when(myObject).getSomeField(anyList());
+                                  doReturn(null).when(myObject).getSomeOtherField(any(Object.class));
+                                  doReturn(null).when(myObject).getSomeArrayField(any(byte[].class));
+                                  assertNull(myObject.getSomeField(new ArrayList<>()));
+                                  assertNull(myObject.getSomeOtherField(new Object()));
+                                  assertNull(myObject.getSomeArrayField(new byte[0]));
+                                  verify(myObject, atLeast(1)).getSomeField(anyList());
+                                  verify(myObject, atLeast(1)).getSomeOtherField(any(Object.class));
+                                  verify(myObject, atLeast(1)).getSomeArrayField(any(byte[].class));
+                              }
+                          }
+                          """
+                )
+        );
+    }
+
+    @Test
+    void whenMultipleStatements() {
+        //language=java
+        rewriteRun(
+                java(
+                        """
+                          class MyObject {
+                              public String getSomeStringField(String input, long otherInput) {
+                                  return "X";
+                              }
+                              public int getSomeIntField() {
+                                  return 0;
+                              }
+                              public Object getSomeObjectField() {
+                                  return new Object();
+                              }
+                              public void doSomething() {}
+                          }
+                          """
+                ),
+                java(
+                        """
+                          import mockit.Expectations;
+                          import mockit.Mocked;
+                          import mockit.integration.junit5.JMockitExtension;
+                          import org.junit.jupiter.api.extension.ExtendWith;
+                          
+                          import static org.junit.jupiter.api.Assertions.assertEquals;
+                          import static org.junit.jupiter.api.Assertions.assertNull;
+                          
+                          @ExtendWith(JMockitExtension.class)
+                          class MyTest {
+                              @Mocked
+                              Object myObject;
+                          
+                              @Mocked
+                              MyObject myOtherObject;
+                          
+                              void test() {
+                                  new Expectations() {{
+                                      myObject.hashCode();
+                                      result = 10;
+                                      myOtherObject.getSomeObjectField();
+                                      result = null;
+                                      myObject.wait(anyLong, anyInt);
+                                      myOtherObject.getSomeStringField(anyString, anyLong);
+                                      result = "foo";
+                                  }};
+                                  assertEquals(10, myObject.hashCode());
+                                  assertNull(myOtherObject.getSomeObjectField());
+                                  myObject.wait(10L, 10);
+                                  assertEquals("foo", myOtherObject.getSomeStringField("bar", 10L));
+                              }
+                          }
+                          """,
+                        """
+                          import org.junit.jupiter.api.extension.ExtendWith;
+                          import org.mockito.Mock;
+                          import org.mockito.junit.jupiter.MockitoExtension;
+                          
+                          import static org.junit.jupiter.api.Assertions.assertEquals;
+                          import static org.junit.jupiter.api.Assertions.assertNull;
+                          import static org.mockito.ArgumentMatchers.*;
+                          import static org.mockito.Mockito.*;
+                          
+                          @ExtendWith(MockitoExtension.class)
+                          class MyTest {
+                              @Mock
+                              Object myObject;
+                          
+                              @Mock
+                              MyObject myOtherObject;
+                          
+                              void test() {
+                                  doReturn(10).when(myObject).hashCode();
+                                  doReturn(null).when(myOtherObject).getSomeObjectField();
+                                  doAnswer(invocation -> null).when(myObject).wait(anyLong(), anyInt());
+                                  doReturn("foo").when(myOtherObject).getSomeStringField(anyString(), anyLong());
+                                  assertEquals(10, myObject.hashCode());
+                                  assertNull(myOtherObject.getSomeObjectField());
+                                  myObject.wait(10L, 10);
+                                  assertEquals("foo", myOtherObject.getSomeStringField("bar", 10L));
+                                  verify(myObject, atLeast(1)).hashCode();
+                                  verify(myOtherObject, atLeast(1)).getSomeObjectField();
+                                  verify(myObject, atLeast(1)).wait(anyLong(), anyInt());
+                                  verify(myOtherObject, atLeast(1)).getSomeStringField(anyString(), anyLong());
+                              }
+                          }
+                          """
+                )
+        );
+    }
+
+    @Test
+    void whenEmptyBlock() {
+        //language=java
+        rewriteRun(
+                java(
+                        """
+                          import mockit.Expectations;
+                          import mockit.Mocked;
+                          import mockit.integration.junit5.JMockitExtension;
+                          import org.junit.jupiter.api.extension.ExtendWith;
+                          
+                          @ExtendWith(JMockitExtension.class)
+                          class MyTest {
+                              @Mocked
+                              Object myObject;
+                          
+                              void test() {
+                                  new Expectations() {{
+                                  }};
+                                  myObject.wait(1L);
+                              }
+                          }
+                          """,
+                        """
+                          import org.junit.jupiter.api.extension.ExtendWith;
+                          import org.mockito.Mock;
+                          import org.mockito.junit.jupiter.MockitoExtension;
+                          
+                          @ExtendWith(MockitoExtension.class)
+                          class MyTest {
+                              @Mock
+                              Object myObject;
+                          
+                              void test() {
+                                  myObject.wait(1L);
+                              }
+                          }
+                          """
+                )
+        );
+    }
+
+    @Test
+    void whenNoBody() {
+        //language=java
+        rewriteRun(
+                java(
+                        """
+                          import mockit.Expectations;
+                          import mockit.Mocked;
+                          import mockit.integration.junit5.JMockitExtension;
+                          import org.junit.jupiter.api.extension.ExtendWith;
+                          
+                          import static org.junit.jupiter.api.Assertions.assertEquals;
+                          
+                          @ExtendWith(JMockitExtension.class)
+                          class MyTest {
+                              @Mocked
+                              Object myObject;
+                          
+                              void test() {
+                                  new Expectations() {{
+                                      myObject.toString();
+                                      result = "foo";
+                                      times = 2;
+                                  }};
+                              }
+                          }
+                          """,
+                        """
+                          import org.junit.jupiter.api.extension.ExtendWith;
+                          import org.mockito.Mock;
+                          import org.mockito.junit.jupiter.MockitoExtension;
+                          
+                          import static org.junit.jupiter.api.Assertions.assertEquals;
+                          import static org.mockito.Mockito.*;
+                          
+                          @ExtendWith(MockitoExtension.class)
+                          class MyTest {
+                              @Mock
+                              Object myObject;
+                          
+                              void test() {
+                                  doReturn("foo").when(myObject).toString();
+                                  //TODO: testing
+                                  verify(myObject, times(2)).toString();
+                              }
+                          }
+                          """
+                )
+        );
+    }
+
 }

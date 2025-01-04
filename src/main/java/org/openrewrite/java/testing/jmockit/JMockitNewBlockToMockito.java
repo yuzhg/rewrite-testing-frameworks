@@ -11,13 +11,17 @@ import org.openrewrite.TreeVisitor;
 import org.openrewrite.java.JavaIsoVisitor;
 import org.openrewrite.java.JavaTemplate;
 import org.openrewrite.java.search.UsesType;
+import org.openrewrite.java.tree.Comment;
 import org.openrewrite.java.tree.Expression;
 import org.openrewrite.java.tree.J;
 import org.openrewrite.java.tree.JavaCoordinates;
 import org.openrewrite.java.tree.JavaType;
+import org.openrewrite.java.tree.Space;
 import org.openrewrite.java.tree.Statement;
+import org.openrewrite.java.tree.TextComment;
 import org.openrewrite.java.tree.TypeTree;
 import org.openrewrite.java.tree.TypeUtils;
+import org.openrewrite.marker.Markers;
 
 import javax.annotation.Nullable;
 import java.util.ArrayList;
@@ -53,6 +57,8 @@ public class JMockitNewBlockToMockito extends Recipe {
                 "org.mockito.Mockito.*",
                 "org.mockito.ArgumentMatchers.*"
         };
+
+        private final JavaTemplate todoTemplate = JavaTemplate.builder(";//TODO: testing").build();
 
         @Override
         public J.Block visitBlock(J.Block block, ExecutionContext executionContext) {
@@ -101,6 +107,9 @@ public class JMockitNewBlockToMockito extends Recipe {
 
             ArgumentMatchersRewriter amr = new ArgumentMatchersRewriter(this, executionContext, block);
             J.MethodInvocation preMockedStub = null;
+
+            // record test statements. If there is no, means it is an old setup/util functions. Need manual changes.
+            int testingStatements = 0;
             for (Statement stmt : statements) {
                 // if Expectation block
                 if (stmt instanceof J.NewClass) {
@@ -149,6 +158,15 @@ public class JMockitNewBlockToMockito extends Recipe {
 
                                 // if mocking the same method, need to finish previous verify.
                                 if (null != preMockedStub && preMockedStub.toString().equalsIgnoreCase(mi.toString()) && !verifyStatements.isEmpty()) {
+                                    // means no code get tested
+                                    if (0 == testingStatements) {
+                                        block = todoTemplate.apply(getCursor(), coordinates);
+                                        updateCursor(block);
+                                        coordinates = block.getCoordinates().lastStatement();
+                                    }
+
+                                    // clean up counting.
+                                    testingStatements = 0;
                                     block = addVerifications(block, updatedStatements, verifyStatements, coordinates);
                                     updateCursor(block);
                                     coordinates = block.getCoordinates().lastStatement();
@@ -195,10 +213,22 @@ public class JMockitNewBlockToMockito extends Recipe {
                 } else {
                     updatedStatements.add(stmt);
                     coordinates = stmt.getCoordinates().after();
+                    testingStatements++;
                 }
             }
 
             block = addVerifications(block, updatedStatements, verifyStatements, coordinates);
+            if (0 == testingStatements) {
+                List<Statement> st = block.getStatements();
+                Statement last = st.get(st.size() - 1);
+                List<Comment> comments = new ArrayList<>(last.getComments());
+                Space prefix = last.getPrefix();
+                comments.add(new TextComment(false, "TODO: testing", prefix.getWhitespace(), Markers.EMPTY));
+                last = last.withComments(comments);
+                st.set(st.size() - 1, last);
+                block = block.withStatements(st);
+            }
+
             return block;
         }
 

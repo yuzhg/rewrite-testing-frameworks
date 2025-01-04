@@ -614,6 +614,181 @@ class JMockitNewBlockToMockitoTest implements RewriteTest {
         );
     }
 
+    @Test
+    void whenMultiExpectationsForm1() {
+        //language=java
+        rewriteRun(
+                java(
+                        """
+                          import mockit.Expectations;
+                          import mockit.Mocked;
+                          import mockit.integration.junit5.JMockitExtension;
+                          import org.junit.jupiter.api.extension.ExtendWith;
+                          import static org.junit.jupiter.api.Assertions.assertEquals;
+
+                          @ExtendWith(JMockitExtension.class)
+                          class MyTest {
+                              @Mocked
+                              Object myObject;
+                          
+                              void test() {
+                                  new Expectations() {{
+                                      myObject.toString();
+                                      result = 10;
+                                  }};
+                                  new Expectations() {{
+                                      myObject.hashCode();
+                                      this.result = 100;
+                                  }};
+                                  assertEquals(10, myObject.toString());
+                                  assertEquals(100, myObject.hashCode());
+                              }
+                          }
+                          """,
+                        """
+                          import org.junit.jupiter.api.extension.ExtendWith;
+                          import org.mockito.Mock;
+                          import org.mockito.junit.jupiter.MockitoExtension;
+                          
+                          import static org.junit.jupiter.api.Assertions.assertEquals;
+                          import static org.mockito.Mockito.*;
+                          
+                          @ExtendWith(MockitoExtension.class)
+                          class MyTest {
+                              @Mock
+                              Object myObject;
+                          
+                              void test() {
+                                  doReturn(10).when(myObject).toString();
+                                  doReturn(100).when(myObject).hashCode();
+                                  assertEquals(10, myObject.toString());
+                                  assertEquals(100, myObject.hashCode());
+                                  verify(myObject, atLeast(1)).toString();
+                                  verify(myObject, atLeast(1)).hashCode();
+                              }
+                          }
+                          """
+                )
+        );
+    }
+
+    @Test
+    void whenMultiExpectationsForm2() {
+        //language=java
+        rewriteRun(
+                java(
+                        """
+                          import mockit.Expectations;
+                          import mockit.Mocked;
+                          import mockit.integration.junit5.JMockitExtension;
+                          import org.junit.jupiter.api.extension.ExtendWith;
+                          
+                          import static org.junit.jupiter.api.Assertions.assertEquals;
+
+                          @ExtendWith(JMockitExtension.class)
+                          class MyTest {
+                              @Mocked
+                              Object myObject;
+                          
+                              void test() {
+                                  new Expectations() {{
+                                      myObject.toString();
+                                      result = 10;
+                                  }
+                                  {
+                                      myObject.hashCode();
+                                      this.result = 100;
+                                  }};
+                                  assertEquals(10, myObject.toString());
+                                  assertEquals(100, myObject.hashCode());
+                              }
+                          }
+                          """,
+                        """
+                          import org.junit.jupiter.api.extension.ExtendWith;
+                          import org.mockito.Mock;
+                          import org.mockito.junit.jupiter.MockitoExtension;
+                          
+                          import static org.junit.jupiter.api.Assertions.assertEquals;
+                          import static org.mockito.Mockito.*;
+                          
+                          @ExtendWith(MockitoExtension.class)
+                          class MyTest {
+                              @Mock
+                              Object myObject;
+                          
+                              void test() {
+                                  doReturn(10).when(myObject).toString();
+                                  doReturn(100).when(myObject).hashCode();
+                                  assertEquals(10, myObject.toString());
+                                  assertEquals(100, myObject.hashCode());
+                                  verify(myObject, atLeast(1)).toString();
+                                  verify(myObject, atLeast(1)).hashCode();
+                              }
+                          }
+                          """
+                )
+        );
+    }
+
+    @Test
+    void whenMultiExpectationsForm3() {
+        //language=java
+        rewriteRun(
+                java(
+                        """
+                          import mockit.Expectations;
+                          import mockit.Mocked;
+                          import mockit.integration.junit5.JMockitExtension;
+                          import org.junit.jupiter.api.extension.ExtendWith;
+                          
+                          import static org.junit.jupiter.api.Assertions.assertEquals;
+
+                          @ExtendWith(JMockitExtension.class)
+                          class MyTest {
+                              @Mocked
+                              Object myObject;
+                          
+                              void test() {
+                                  new Expectations() {{
+                                      myObject.toString();
+                                      result = 10;
+                                      myObject.hashCode();
+                                      this.result = 100;
+                                  }};
+                                  assertEquals(10, myObject.toString());
+                                  assertEquals(100, myObject.hashCode());
+                              }
+                          }
+                          """,
+                        """
+                          import org.junit.jupiter.api.extension.ExtendWith;
+                          import org.mockito.Mock;
+                          import org.mockito.junit.jupiter.MockitoExtension;
+                          
+                          import static org.junit.jupiter.api.Assertions.assertEquals;
+                          import static org.mockito.Mockito.*;
+                          
+                          @ExtendWith(MockitoExtension.class)
+                          class MyTest {
+                              @Mock
+                              Object myObject;
+                          
+                              void test() {
+                                  doReturn(10).when(myObject).toString();
+                                  doReturn(100).when(myObject).hashCode();
+                                  assertEquals(10, myObject.toString());
+                                  assertEquals(100, myObject.hashCode());
+                                  verify(myObject, atLeast(1)).toString();
+                                  verify(myObject, atLeast(1)).hashCode();
+                              }
+                          }
+                          """
+                )
+        );
+    }
+
+
     // my case don't have returns, not handle it now.
     @Ignore
     void whenReturnsInOneLine() {
@@ -634,7 +809,6 @@ class JMockitNewBlockToMockitoTest implements RewriteTest {
                           import mockit.Mocked;
                           import mockit.integration.junit5.JMockitExtension;
                           import org.junit.jupiter.api.extension.ExtendWith;
-                          
                           import static org.junit.jupiter.api.Assertions.assertEquals;
                           
                           @ExtendWith(JMockitExtension.class)

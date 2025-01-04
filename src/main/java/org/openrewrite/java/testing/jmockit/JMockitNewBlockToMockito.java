@@ -100,6 +100,7 @@ public class JMockitNewBlockToMockito extends Recipe {
             JavaCoordinates coordinates = block.getCoordinates().firstStatement();
 
             ArgumentMatchersRewriter amr = new ArgumentMatchersRewriter(this, executionContext, block);
+            J.MethodInvocation preMockedStub = null;
             for (Statement stmt : statements) {
                 // if Expectation block
                 if (stmt instanceof J.NewClass) {
@@ -110,11 +111,6 @@ public class JMockitNewBlockToMockito extends Recipe {
                         updatedStatements.add(stmt);
                         coordinates = stmt.getCoordinates().after();
                         continue;
-                    }
-
-                    if (!verifyStatements.isEmpty()) {
-                        block = addVerifications(block, updatedStatements, verifyStatements, coordinates);
-                        updateCursor(block);
                     }
 
                     // expand the inner statements, merge the `{{x;x;x;}}` case and `{{x}{x}{x}}` case.
@@ -136,9 +132,9 @@ public class JMockitNewBlockToMockito extends Recipe {
                     });
 
                     List<Expression> results = new ArrayList<>();
-                    J.MethodInvocation stub = null;
                     Integer times = null;
                     Integer minTimes = null;
+                    J.MethodInvocation stub = null;
                     for (Statement expStatement : expStatements) {
                         // now handle each statement.
                         if (expStatement instanceof J.MethodInvocation) {
@@ -150,15 +146,25 @@ public class JMockitNewBlockToMockito extends Recipe {
                                 coordinates = mi.getCoordinates().after();
                             } else {
                                 // Have operations to mock.
+
+                                // if mocking the same method, need to finish previous verify.
+                                if (null != preMockedStub && preMockedStub.toString().equalsIgnoreCase(mi.toString()) && !verifyStatements.isEmpty()) {
+                                    block = addVerifications(block, updatedStatements, verifyStatements, coordinates);
+                                    updateCursor(block);
+                                    coordinates = block.getCoordinates().lastStatement();
+                                }
+
                                 block = doMocking(executionContext, stub, results, coordinates, times, minTimes,
                                         verifyStatements).orElse(block);
                                 updatedStatements = block.getStatements();
                                 coordinates = block.getCoordinates().lastStatement();
 
                                 // now record and start a new stub.
+                                preMockedStub = stub;
                                 stub = amr.rewriteMethodInvocation(mi);
                                 times = null;
                                 minTimes = null;
+                                results.clear();
                             }
                         } else if (expStatement instanceof J.Assignment) {
                             J.Assignment as = (J.Assignment) expStatement;
@@ -185,6 +191,7 @@ public class JMockitNewBlockToMockito extends Recipe {
                             verifyStatements).orElse(block);
                     updatedStatements = block.getStatements();
                     coordinates = block.getCoordinates().lastStatement();
+                    preMockedStub = stub;
                 } else {
                     updatedStatements.add(stmt);
                     coordinates = stmt.getCoordinates().after();
@@ -203,8 +210,8 @@ public class JMockitNewBlockToMockito extends Recipe {
             updateCursor(block);
             for (Function<JavaCoordinates, J.Block> verifyStatement : verifyStatements) {
                 block = verifyStatement.apply(coordinates);
-                updateCursor(block);
                 coordinates = block.getCoordinates().lastStatement();
+                updateCursor(block);
             }
             verifyStatements.clear();
             return block;
@@ -218,7 +225,6 @@ public class JMockitNewBlockToMockito extends Recipe {
             }
 
             // This is not the first mock sections. End the previous stub.
-
             List<Object> templateParams = new ArrayList<>();
             StringBuilder template = new StringBuilder();
             if (resultList.isEmpty()) {

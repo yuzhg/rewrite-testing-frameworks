@@ -95,7 +95,7 @@ class ArgumentMatchersRewriter {
         return expectationsBlock.withStatements(newStatements);
     }
 
-    private J.MethodInvocation rewriteMethodInvocation(J.MethodInvocation invocation) {
+    public J.MethodInvocation rewriteMethodInvocation(J.MethodInvocation invocation) {
         if (invocation.getSelect() instanceof J.MethodInvocation) {
             invocation = invocation.withSelect(rewriteMethodInvocation((J.MethodInvocation) invocation.getSelect()));
         }

@@ -67,8 +67,10 @@ public class RemoveTimesZeroAndOne extends Recipe {
                             if (timesMatcher.matches(times) && J.Literal.isLiteralValue(times.getArguments().get(0), 1)) {
                                 maybeRemoveImport("org.mockito.Mockito.times");
                                 JavaType.Method methodType = mi.getMethodType()
-                                        .withParameterNames(mi.getMethodType().getParameterNames().subList(0, 1))
-                                        .withParameterTypes(mi.getMethodType().getParameterTypes().subList(0, 1));
+                                        .withParameterNames(mi.getMethodType().getParameterNames().subList(0, 1));
+                                if (mi.getMethodType().getParameterTypes() != null && !mi.getMethodType().getParameterTypes().isEmpty()) {
+                                    methodType = methodType.withParameterTypes(mi.getMethodType().getParameterTypes().subList(0, 1));
+                                }
                                 return mi
                                         .withArguments(mi.getArguments().subList(0, 1))
                                         .withMethodType(methodType)

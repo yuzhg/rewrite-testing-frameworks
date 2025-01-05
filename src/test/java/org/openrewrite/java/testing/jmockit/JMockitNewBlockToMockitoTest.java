@@ -1127,4 +1127,69 @@ class JMockitNewBlockToMockitoTest implements RewriteTest {
         );
     }
 
+    @Test
+    void whenResultIsComplex() {
+        //language=java
+        rewriteRun(
+                java(
+                        """
+                          import java.util.ArrayList;
+                          import mockit.Expectations;
+                          import mockit.Mocked;
+                          import mockit.integration.junit5.JMockitExtension;
+                          import org.junit.jupiter.api.extension.ExtendWith;
+                          
+                          import static org.junit.jupiter.api.Assertions.assertEquals;
+                          
+                          @ExtendWith(JMockitExtension.class)
+                          class MyTest {
+                              @Mocked
+                              Object myObject;
+                          
+                              void test() {
+                                  new Expectations() {{
+                                      myObject.toString();
+                                      ArrayList<String> list = new ArrayList<String>();
+                                      list.add("foo");
+                                      list.add(new String("bar"));
+                                      list.add("baz");
+                                      result = list;
+                                      times = 2;
+                                  }};
+                                  assertEquals("foo", myObject.toString());
+                                  assertEquals("foo", myObject.toString());
+                              }
+                          }
+                          """,
+                        """
+                          import java.util.ArrayList;
+                          import org.junit.jupiter.api.extension.ExtendWith;
+                          import org.mockito.Mock;
+                          import org.mockito.junit.jupiter.MockitoExtension;
+                          
+                          import static org.junit.jupiter.api.Assertions.assertEquals;
+                          import static org.mockito.Mockito.*;
+                          
+                          @ExtendWith(MockitoExtension.class)
+                          class MyTest {
+                              @Mock
+                              Object myObject;
+                          
+                              void test() {
+                                  ArrayList<String> list = new ArrayList<String>();
+                                  list.add("foo");
+                                  list.add(new String("bar"));
+                                  list.add("baz");
+                                  doReturn(list).when(myObject).toString();
+                                  assertEquals("foo", myObject.toString());
+                                  assertEquals("foo", myObject.toString());
+                                  verify(myObject, times(2)).toString();
+                              }
+                          }
+                          """
+                )
+        );
+    }
+
+
 }

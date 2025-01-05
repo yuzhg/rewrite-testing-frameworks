@@ -1,3 +1,18 @@
+/*
+ * Copyright 2024 the original author or authors.
+ * <p>
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * <p>
+ * https://www.apache.org/licenses/LICENSE-2.0
+ * <p>
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.openrewrite.java.testing.jmockit;
 
 import lombok.extern.slf4j.Slf4j;
@@ -53,12 +68,10 @@ public class JMockitNewBlockToMockito extends Recipe {
     }
 
     private static class JMockitNewBlockVisitor extends JavaIsoVisitor<ExecutionContext> {
-        private static String[] imports = new String[]{
+        private static final String[] imports = new String[]{
                 "org.mockito.Mockito.*",
                 "org.mockito.ArgumentMatchers.*"
         };
-
-        private final JavaTemplate todoTemplate = JavaTemplate.builder(";//TODO: testing").build();
 
         @Override
         public J.Block visitBlock(J.Block block, ExecutionContext executionContext) {
@@ -134,7 +147,7 @@ public class JMockitNewBlockToMockito extends Recipe {
                             J.Assignment as = (J.Assignment) s;
                             String varName = as.getVariable().toString();
                             Expression obj = as.getAssignment();
-                            if ("results".equals(varName) && !(obj instanceof J.Literal)) {
+                            if ("result".equals(varName) && !(obj instanceof J.Literal)) {
                                 resultVars.add(obj.toString());
                             }
                         }
@@ -151,22 +164,14 @@ public class JMockitNewBlockToMockito extends Recipe {
                             Expression select = mi.getSelect();
                             if (null != select && resultVars.contains(select.toString())) {
                                 // operations on result variables
-                                updatedStatements.add(mi);
-                                coordinates = mi.getCoordinates().after();
+                                expStatement = expStatement.withPrefix(stmt.getPrefix());
+                                updatedStatements.add(expStatement);
+                                coordinates = expStatement.getCoordinates().after();
                             } else {
                                 // Have operations to mock.
 
                                 // if mocking the same method, need to finish previous verify.
                                 if (null != preMockedStub && preMockedStub.toString().equalsIgnoreCase(mi.toString()) && !verifyStatements.isEmpty()) {
-                                    // means no code get tested
-                                    if (0 == testingStatements) {
-                                        block = todoTemplate.apply(getCursor(), coordinates);
-                                        updateCursor(block);
-                                        coordinates = block.getCoordinates().lastStatement();
-                                    }
-
-                                    // clean up counting.
-                                    testingStatements = 0;
                                     block = addVerifications(block, updatedStatements, verifyStatements, coordinates);
                                     updateCursor(block);
                                     coordinates = block.getCoordinates().lastStatement();
@@ -199,11 +204,19 @@ public class JMockitNewBlockToMockito extends Recipe {
                             } else if ("minTimes".equalsIgnoreCase(varName)) {
                                 minTimes = Integer.parseInt(as.getAssignment().toString());
                             } else {
-                                updatedStatements.add(as);
-                                coordinates = as.getCoordinates().after();
+                                expStatement = expStatement.withPrefix(stmt.getPrefix());
+                                updatedStatements.add(expStatement);
+                                coordinates = expStatement.getCoordinates().after();
                             }
+                        } else {
+                            expStatement = expStatement.withPrefix(stmt.getPrefix());
+                            updatedStatements.add(expStatement);
+                            coordinates = expStatement.getCoordinates().after();
                         }
                     }
+
+                    block = block.withStatements(updatedStatements);
+                    updateCursor(block);
 
                     block = doMocking(executionContext, stub, results, coordinates, times, minTimes,
                             verifyStatements).orElse(block);
@@ -216,6 +229,7 @@ public class JMockitNewBlockToMockito extends Recipe {
                     testingStatements++;
                 }
             }
+
 
             block = addVerifications(block, updatedStatements, verifyStatements, coordinates);
             if (0 == testingStatements) {
@@ -341,13 +355,6 @@ public class JMockitNewBlockToMockito extends Recipe {
             }
 
             return Optional.of(bl);
-        }
-
-
-        @Override
-        public J.CompilationUnit visitCompilationUnit(J.CompilationUnit cu, ExecutionContext executionContext) {
-            J.CompilationUnit compilationUnit = super.visitCompilationUnit(cu, executionContext);
-            return compilationUnit;
         }
     }
 }

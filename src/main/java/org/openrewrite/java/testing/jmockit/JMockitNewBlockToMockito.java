@@ -170,6 +170,9 @@ public class JMockitNewBlockToMockito extends Recipe {
                             } else {
                                 // Have operations to mock.
 
+                                block = block.withStatements(updatedStatements);
+                                updateCursor(block);
+
                                 // if mocking the same method, need to finish previous verify.
                                 if (null != preMockedStub && preMockedStub.toString().equalsIgnoreCase(mi.toString()) && !verifyStatements.isEmpty()) {
                                     block = addVerifications(block, updatedStatements, verifyStatements, coordinates);

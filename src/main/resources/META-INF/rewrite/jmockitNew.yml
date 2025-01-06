@@ -28,7 +28,7 @@ recipeList:
   - org.openrewrite.java.testing.jmockit.JMockitAnnotatedArgumentToMockito
   - org.openrewrite.java.ChangeType:
       oldFullyQualifiedTypeName: mockit.Mocked
-      newFullyQualifiedTypeName: org.mockito.Mock
+      newFullyQualifiedTypeName: org.springframework.boot.test.mock.mockito.SpyBean
   - org.openrewrite.java.ChangeType:
       oldFullyQualifiedTypeName: mockit.Injectable
       newFullyQualifiedTypeName: org.mockito.Mock
